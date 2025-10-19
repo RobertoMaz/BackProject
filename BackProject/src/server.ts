@@ -11,16 +11,17 @@ dotenv.config();
  * @type {FastifyInstance}
  */
 const server = Fastify({
-  logger: {
-    // TODO: In production, use a more structured logger and transport, like pino-loki
-    transport: {
-      target: 'pino-pretty',
-      options: {
-        translateTime: 'HH:MM:ss Z',
-        ignore: 'pid,hostname',
+  logger: process.env.NODE_ENV === 'production'
+    ? true // In production, use the default JSON logger.
+    : {    // In development, use pino-pretty.
+        transport: {
+          target: 'pino-pretty',
+          options: {
+            translateTime: 'HH:MM:ss Z',
+            ignore: 'pid,hostname',
+          },
+        },
       },
-    },
-  },
 });
 
 // Set Zod as the schema validator and serializer
@@ -33,7 +34,6 @@ server.register(indexRoutes);
 /**
  * Starts the Fastify server.
  * Binds to the port specified in the PORT environment variable, or 5174 by default.
- * // TODO: Implement graceful shutdown on SIGINT and SIGTERM signals.
  */
 const start = async () => {
   try {
@@ -46,3 +46,18 @@ const start = async () => {
 };
 
 start();
+
+const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
+
+for (const signal of signals) {
+  process.on(signal, async () => {
+    try {
+      await server.close();
+      console.log(`Server closed successfully due to ${signal} signal.`);
+      process.exit(0);
+    } catch (err) {
+      console.error('Error during server shutdown:', err);
+      process.exit(1);
+    }
+  });
+}
